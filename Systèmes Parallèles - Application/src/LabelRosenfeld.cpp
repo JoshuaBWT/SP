@@ -89,29 +89,6 @@ uint32_t LabelRosenfeld::solvePackTable(uint32_t* T, uint32_t ne) {
     return na;
 }
 
-uint32_t LabelRosenfeld::solvePackTable(Region32* region32, uint32_t nes[]) {
-    uint32_t e;
-    uint32_t na; // ancetre pack
-
-    uint32_t * T = region32->T;
-
-    for(int i = 0; i < region32->Regions.size(); i++)
-    {
-        na = solvePackTable(region32->Regions[i].T, nes[i]);
-    }
-    /*
-    na = 0;
-    for (e=1; e<=ne; e++) {
-        if (e != T[e]) {
-            T[e] = T[T[e]];
-        } else {
-            T[e] = ++na;
-        }
-    }
-    */
-    return na;
-}
-
 void LabelRosenfeld::updateLabel(uint32_t **E, int i0, int i1, int j0, int j1, uint32_t* T) {
     int i, j;
 
@@ -351,7 +328,7 @@ void LabelRosenfeld::labeliseSequetiel4C(Region32& region32) {
     }
 
     /* Résolution des équivalences */
-    //region32.neFinal = solvePackTable(region32.T, ne);
+    region32.neFinal = solvePackTable(region32.T, ne);
 
     /* Mise à jour sur l'image */
     updateLabel(region32.E, i0, i1, j0, j1, region32.T);
@@ -385,6 +362,7 @@ void LabelRosenfeld::labeliseSequetiel8C(Region32& region32) {
     /* Résolution des équivalences */
     region32.neFinal = solvePackTable(region32.T, ne);
 
+
     /* Mise à jour sur l'image */
     updateLabel(region32.E, i0, i1, j0, j1, region32.T);
 
@@ -397,44 +375,208 @@ void LabelRosenfeld::labeliseSequetiel8C(Region32& region32) {
 
 /* Labelise en parallèle */
 void LabelRosenfeld::labeliseParallele4C(Region32& region32) {
-    /* Declaration des variables */
+
+    uint32_t ne;
+
     int i0 			= 	region32.i0;
     int i1 			= 	region32.i1;
     int j0 			= 	region32.j0;
     int j1 			= 	region32.j1;
     int largeur 	= 	j1-j0;
 
-    uint32_t ne;
-
     /* Netoyage des précédents traitements */
     region32.cleanRegions32();
-    /* Premier etiquetage */
 
-    ne = 0;
-    //cout << "number of regions :" << region32.Regions.size() << endl;
-    //ne = line0Labeling4C(region32.Regions[0].X, i0, region32.Regions[0].E, region32.Regions[0].T, largeur, ne);
-    for(int j = 0; j < region32.Regions.size(); j++) {
-        Region32 region32Bis = region32.Regions[j];
-        i0 			= 	region32Bis.i0;
-        i1 			= 	region32Bis.i1;
-        ne = j;
-        ne = line0Labeling4C(region32Bis.X, i0, region32Bis.E, region32Bis.T, largeur, ne);
-        for (int i=i0+1; i<i1; i++) {
-            ne = lineLabeling4C(region32Bis.X, i, region32Bis.E, region32Bis.T, largeur, ne);
+    /* Premier etiquetage */
+    #pragma omp parallel for
+    for(id 0; j < region32.np; j++) {
+        region32.Regions[j].ne = 0;
+        region32.Regions[j].ne = line0Labeling4C(region32.Regions[j].X,
+            region32.Regions[j].i0,
+            region32.Regions[j].E,
+            region32.Regions[j].T,
+            largeur,
+            region32.Regions[j].ne);
+
+        for (int i=region32.Regions[j].i0+1; i<region32.Regions[j].i1; i++) {
+            region32.Regions[j].ne = lineLabeling4C(region32.Regions[j].X, i, region32.Regions[j].E, region32.Regions[j].T, largeur, region32.Regions[j].ne);
         }
-        updateLabel(region32Bis.E, i0, i1, j0, j1, region32Bis.T);
+        //updateLabel(region32.Regions[j].E, region32.Regions[j].i0, region32.Regions[j].i1, j0, j1, region32.Regions[j].T);
     }
 
-    region32.neFinal = solvePackTable(region32.T, ne);
+    int temp = 0;
+    int iter = 1;
 
-    updateLabel(region32.E, i0, i1, j0, j1, region32.T);
-    //updateLabel(region32Bis.E, i0, i1, j0, j1, region32Bis.T);
-    /* Résolution des équivalences */
-    /* Mise à jour sur l'image */
-    region32.ne = ne;
-    /* Mémorisation du nombre d'étiquettes */
+    for (int i = 0; i < region32.np; i++){
+        for(int k =1; k <= region32.Regions[i].ne ; k++){
+            region32.Regions[i].T[k] += temp;
+            region32.T[iter] = region32.Regions[i].T[k];
+            iter++;
+        }
+    temp += region32.Regions[i].ne;
+    }
+
+    //TRAITEMENT DES FRONTIERES
+    int temp2 = 0;
+
+    for(int i = 0; i < region32.np - 1; i++)
+    {
+        for(int j = 0; j < largeur; j++)
+        {
+                uint32_t e1, e2, eT1, eT2, r1, r2, epsillon;
+
+                //Without offset
+
+                e1 = region32.E[region32.Regions[i].i1-1][j];
+                e2 = region32.E[region32.Regions[i].i1][j];
+
+                eT1 = region32.Regions[i].T[e1];
+                eT2 = region32.Regions[i+1].T[e2];
+
+                r1 = FindRoot(region32.T, eT1);
+                r2 = FindRoot(region32.T, eT2);
+
+                epsillon = ui32MinNonNul2(r1, r2);
+
+                if ((r1) && (r1 != epsillon)) SetRoot(region32.T, r1, epsillon);
+                if ((r2) && (r2 != epsillon)) SetRoot(region32.T, r2, epsillon);
+
+                //With offset
+                /*
+                e1 = region32.E[region32.Regions[i].i1-1][j] + region32.Regions[i].ne + temp2;
+                e2 = region32.E[region32.Regions[i].i1][j] + region32.Regions[i].ne + temp2;
+                eT1 = region32.T[e1];
+                eT2 = region32.T[e2];
+                r1 = FindRoot(region32.T, eT1);
+                r2 = FindRoot(region32.T, eT2);
+
+                epsillon = ui32MinNonNul2(r1, r2);
+                if ((r1) && (r1 != epsillon))
+                    SetRoot(region32.T, r1, epsillon);
+                if ((r2) && (r2 != epsillon))
+                   SetRoot(region32.T, r2, epsillon);
+                */
+        }
+
+        temp2 += region32.Regions[i].ne;
+    }
+
+
+    region32.neFinal = solvePackTable(region32.T, temp);
+
+    for (int i = 0; i < region32.np; i++){
+        for(int k = 1; k <= region32.Regions[i].ne ; k++){
+            region32.Regions[i].T[k] = region32.T[region32.Regions[i].T[k]];
+        }
+    }
+
+    #pragma omp parallel for
+    for(int j = 0; j < region32.np; j++)
+    {
+        updateLabel(region32.Regions[j].E, region32.Regions[j].i0, region32.Regions[j].i1, j0, j1, region32.Regions[j].T);
+    }
+
+    //region32.ne = ne;
 }
 
 void LabelRosenfeld::labeliseParallele8C(Region32& region32) {
-    //LabelRosenfeld::labeliseParallele4C(region32);
+
+    uint32_t ne;
+
+    int i0 			= 	region32.i0;
+    int i1 			= 	region32.i1;
+    int j0 			= 	region32.j0;
+    int j1 			= 	region32.j1;
+    int largeur 	= 	j1-j0;
+
+    /* Netoyage des précédents traitements */
+    region32.cleanRegions32();
+
+    /* Premier etiquetage */
+    #pragma omp parallel for
+    for(int j = 0; j < region32.np; j++) {
+        region32.Regions[j].ne = 0;
+        region32.Regions[j].ne = line0Labeling8C(region32.Regions[j].X,
+            region32.Regions[j].i0,
+            region32.Regions[j].E,
+            region32.Regions[j].T,
+            largeur,
+            region32.Regions[j].ne);
+
+        for (int i=region32.Regions[j].i0+1; i<region32.Regions[j].i1; i++) {
+            region32.Regions[j].ne = lineLabeling8C(region32.Regions[j].X, i, region32.Regions[j].E, region32.Regions[j].T, largeur, region32.Regions[j].ne);
+        }
+        //updateLabel(region32.Regions[j].E, region32.Regions[j].i0, region32.Regions[j].i1, j0, j1, region32.Regions[j].T);
+    }
+
+    int temp = 0;
+    int iter = 1;
+
+    for (int i = 0; i < region32.np; i++){
+        for(int k =1; k <= region32.Regions[i].ne ; k++){
+            region32.Regions[i].T[k] += temp;
+            region32.T[iter] = region32.Regions[i].T[k];
+            iter++;
+        }
+    temp += region32.Regions[i].ne;
+    }
+
+    //TRAITEMENT DES FRONTIERES
+    int temp2 = 0;
+
+    for(int i = 0; i < region32.np - 1; i++)
+    {
+        for(int j = 0; j < largeur; j++)
+        {
+                uint32_t e1, e2, e3, e4,
+                eT1, eT2, eT3, eT4,
+                r1, r2, r3, r4,
+                epsillon;
+
+                //Without offset
+
+                e1 = region32.E[region32.Regions[i].i1-1][j];
+                e2 = region32.E[region32.Regions[i].i1][j-1];
+                e3 = region32.E[region32.Regions[i].i1][j];
+                e4 = region32.E[region32.Regions[i].i1][j+1];
+
+                eT1 = region32.Regions[i].T[e1];
+                eT2 = region32.Regions[i+1].T[e2];
+                eT3 = region32.Regions[i+1].T[e3];
+                eT4 = region32.Regions[i+1].T[e4];
+
+                r1 = FindRoot(region32.T, eT1);
+                r2 = FindRoot(region32.T, eT2);
+                r3 = FindRoot(region32.T, eT3);
+                r4 = FindRoot(region32.T, eT4);
+
+                epsillon = ui32MinNonNul4(r1, r2, r3, r4);
+
+                if ((r1) && (r1 != epsillon)) SetRoot(region32.T, r1, epsillon);
+                if ((r2) && (r2 != epsillon)) SetRoot(region32.T, r2, epsillon);
+                if ((r3) && (r3 != epsillon)) SetRoot(region32.T, r3, epsillon);
+                if ((r4) && (r4 != epsillon)) SetRoot(region32.T, r4 , epsillon);
+
+
+        }
+
+        temp2 += region32.Regions[i].ne;
+    }
+
+    region32.neFinal = solvePackTable(region32.T, temp);
+
+    for (int i = 0; i < region32.np; i++){
+        for(int k = 1; k <= region32.Regions[i].ne ; k++){
+            region32.Regions[i].T[k] = region32.T[region32.Regions[i].T[k]];
+        }
+    }
+
+    #pragma omp parallel for
+    for(int j = 0; j < region32.np; j++)
+    {
+        updateLabel(region32.Regions[j].E, region32.Regions[j].i0, region32.Regions[j].i1, j0, j1, region32.Regions[j].T);
+    }
+
+    //region32.ne = ne;
+
 }

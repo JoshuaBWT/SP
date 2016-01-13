@@ -13,6 +13,7 @@
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
+				<Option parameters="T 2fliejzqfouehzofhefeqfe" />
 				<Compiler>
 					<Add option="-O3" />
 					<Add option="-Wall" />
@@ -35,8 +36,8 @@
 		<Unit filename="include/main.hpp" />
 		<Unit filename="src/ImageEtiquette.cpp" />
 		<Unit filename="src/LabelRosenfeld.cpp" />
-		<Unit filename="src/main.cpp" />
 		<Unit filename="src/Region32.cpp" />
+		<Unit filename="src/main.cpp" />
 		<Extensions>
 			<code_completion />
 			<debugger />

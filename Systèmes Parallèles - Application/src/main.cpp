@@ -97,7 +97,7 @@ int main(int argc, const char * argv[]) {
     int connexite = CONNEXITE;
     double freq = FREQ;
     char filename[50];
-    strcpy(filename,"Images/boulons_512.pgm");
+    strcpy(filename,"Images/sel4.pgm");
     bool lancer	=	true;
 
     int i;

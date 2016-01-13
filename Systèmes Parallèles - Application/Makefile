@@ -19,7 +19,7 @@ LIB_INC_PATH =
 OS = LINUX
 
 # -- Macros ----------
-CC = g++
+CC = g++ -g
 
 # -- Flags ----------
 C_DEBUG_FLAGS = -O0
